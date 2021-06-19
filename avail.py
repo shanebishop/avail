@@ -56,6 +56,10 @@ def input_loop():
                 print(f'{opt} not available on FreeBSD.')
 
         print()
+        print('Linux man page:', LINUX_MAN_PAGES.format(command_name))
+        print('GNU manual page:', GNU_HTML_MANUALS.format(command_name))
+        if freebsd_opts is not None:
+            print('FreeBSD man page:', FREEBSD_MAN_PAGES.format(command_name))
 
         exit(0)
 
