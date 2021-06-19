@@ -58,6 +58,9 @@ def input_loop():
             print(f'Failed to find result for "{command_name}".')
             continue
 
+        # Since POSIX 7 and Plan 9 have the fewest utilities, only retrieve
+        # their options once it has been confirmed that the command is
+        # available on at least one more popular Unix platform
         plan_9_opts = get_plan_9_opts(command_name)
         posix_7_opts = get_posix_7_opts(command_name)
 
@@ -105,9 +108,13 @@ def get_soup(pages_string, command_name):
     """Get soup for any OS based on command name.
     Returns (soup, page_found)."""
 
-    # TODO Implement caching up to 5MB worth of searches
-
     soup = None
+
+    # TODO Implement caching up to 5MB worth of searches
+    # Right now get_cached() is just a placeholder function
+    soup, cache_hit = get_cached(command_name)
+    if cache_hit:
+        return soup
 
     # Some of the pages will be unhappy if they do not appear
     # to be visited by a browser, so emulate Google Chrome on
@@ -131,6 +138,14 @@ def get_soup(pages_string, command_name):
     soup = BeautifulSoup(res.text, 'html.parser')
 
     return soup, True
+
+
+def get_cached(command_name):
+    # TODO Implement caching up to 5MB worth of searches
+    # Right now get_cached() is just a placeholder function
+    soup = None
+    cache_hit = False
+    return soup, cache_hit
 
 
 def get_linux_opts(command_name):
