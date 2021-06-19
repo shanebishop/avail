@@ -45,20 +45,28 @@ def input_loop():
 
         print()
         print(description)
-        print()
 
         for opt in (user_opts - linux_opts):
             print(f'{opt} not available on Linux.')
-        for opt in (user_opts - freebsd_opts):
-            print(f'{opt} not available on FreeBSD.')
+
+        if freebsd_opts is None:
+            print(f'{command_name} is not available on FreeBSD.')
+        else:
+            for opt in (user_opts - freebsd_opts):
+                print(f'{opt} not available on FreeBSD.')
+
+        print()
 
         exit(0)
 
 
 def get_soup(pages_string, command_name):
-    """Get soup for any OS based on command name"""
+    """Get soup for any OS based on command name.
+    Returns (soup, page_found)."""
 
     # TODO Implement caching up to 5MB worth of searches
+
+    soup = None
 
     # Some of the pages will be unhappy if they do not appear
     # to be visited by a browser, so emulate Google Chrome on
@@ -70,10 +78,16 @@ def get_soup(pages_string, command_name):
     res = requests.get(pages_string.format(command_name), headers=headers)
 
     if res.status_code < 200 or res.status_code > 299:
-        return None
+        return soup, False
+
+    # For the FreeBSD site, it will still return 200 status code even if utility
+    # is not found, so we need to check if the utility was found
+    if pages_string == FREEBSD_MAN_PAGES and 'Sorry, no data found' in res.text:
+        return soup, False
 
     soup = BeautifulSoup(res.text, 'html.parser')
-    return soup
+
+    return soup, True
 
 
 def get_linux_opts(command_name):
@@ -82,9 +96,9 @@ def get_linux_opts(command_name):
     opts = None
     description = None
 
-    soup = get_soup(LINUX_MAN_PAGES, command_name)
+    soup, page_found = get_soup(LINUX_MAN_PAGES, command_name)
 
-    if soup is None:
+    if not page_found:
         return opts, description
 
     # The description is always the second pre on the page
@@ -126,9 +140,9 @@ def find_opts_linux(soup, header):
 
 
 def get_freebsd_opts(command_name):
-    soup = get_soup(FREEBSD_MAN_PAGES, command_name)
+    soup, page_found = get_soup(FREEBSD_MAN_PAGES, command_name)
 
-    if soup is None:
+    if not page_found:
         return None
 
     search_sections = [
