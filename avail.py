@@ -20,6 +20,10 @@ GNU_HTML_MANUALS = 'https://www.gnu.org/software/{}/manual/html_chapter/index.ht
 
 
 def main():
+    print('Disclaimer: Even if an option is available on another OS, there')
+    print('            may be subtle differences between implementations.')
+    print()
+
     try:
         input_loop()
     except KeyboardInterrupt:
@@ -33,7 +37,7 @@ def input_loop():
         command = shlex.split(user_input)
         command_name = command[0]
 
-        user_opts = {x for x in command if x[0] == '-'}
+        user_opts = {x for x in command if x[0] == '-' and line != '-'}
 
         linux_opts, description = get_linux_opts(command_name)
 
@@ -42,26 +46,37 @@ def input_loop():
             continue
 
         freebsd_opts = get_freebsd_opts(command_name)
+        plan_9_opts = get_plan_9_opts(command_name)
 
         print()
         print(description)
-
-        for opt in (user_opts - linux_opts):
-            print(f'{opt} not available on Linux.')
+        print()
 
         if freebsd_opts is None:
             print(f'{command_name} is not available on FreeBSD.')
-        else:
-            for opt in (user_opts - freebsd_opts):
-                print(f'{opt} not available on FreeBSD.')
+        if plan_9_opts is None:
+            print(f'{command_name} does not have a Plan 9 implementation.')
+
+        for opt in user_opts:
+            not_present_list = []
+
+            if linux_opts and opt not in linux_opts:
+                not_present_list.append('GNU/Linux')
+            if freebsd_opts and opt not in freebsd_opts:
+                not_present_list.append('FreeBSD')
+            if plan_9_opts and opt not in plan_9_opts:
+                not_present_list.append('Plan 9')
+
+            print(f'{opt} not available on the following: {not_present_list}')
 
         print()
         print('Linux man page:', LINUX_MAN_PAGES.format(command_name))
-        print('GNU manual page:', GNU_HTML_MANUALS.format(command_name))
+        print('GNU HTML manual:', GNU_HTML_MANUALS.format(command_name))
         if freebsd_opts is not None:
             print('FreeBSD man page:', FREEBSD_MAN_PAGES.format(command_name))
-
-        exit(0)
+        if plan_9_opts is not None:
+            print('Plan 9 man page:', PLAN_9_MAN_PAGES.format(command_name))
+        print()
 
 
 def get_soup(pages_string, command_name):
@@ -135,7 +150,7 @@ def find_opts_linux(soup, header):
 
     opts_lines = opts_el.text.split('\n')
     opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in opts_lines if line]
-    opts = [line for line in opts_lines if line[0] == '-']
+    opts = [line for line in opts_lines if line[0] == '-' and line != '-']
 
     # Remove false positives
     opts = {o for o in opts if not o[-1] in '.,;)]}!'}
@@ -163,8 +178,45 @@ def get_freebsd_opts(command_name):
 
 def find_opts_freebsd(soup, header):
     lines = soup.text.split('\n')
-    opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in lines if line]
-    opts = [line for line in opts_lines if line[0] == '-']
+    opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in lines if line.strip()]
+    opts = [line for line in opts_lines if line[0] == '-' and line != '-']
+
+    # Remove false positives
+    opts = {o for o in opts if not o[-1] in '.,;)]}!'}
+
+    return opts
+
+
+def get_plan_9_opts(command_name):
+    # Some of the plan 9 man pages don't contain the options
+    # on lines by themselves, so we hardcode the options instead
+    if command_name == 'cp':
+        return {'-g', '-u', '-x'}
+    elif command_name == 'fcp':
+        return {'-g', '-u', '-x'}
+    elif command_name == 'mv':
+        return set()
+
+    soup, page_found = get_soup(PLAN_9_MAN_PAGES, command_name)
+
+    if not page_found:
+        return None
+
+    search_sections = [
+        'DESCRIPTION',
+    ]
+
+    opts = set()
+    for section in search_sections:
+        opts.update(find_opts_plan_9(soup, section))
+
+    return opts
+
+
+def find_opts_plan_9(soup, header):
+    lines = soup.text.split('\n')
+    opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in lines if line.strip()]
+    opts = [line for line in opts_lines if line[0] == '-' and line != '-']
 
     # Remove false positives
     opts = {o for o in opts if not o[-1] in '.,;)]}!'}
