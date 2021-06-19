@@ -9,12 +9,14 @@ try:
     from bs4 import BeautifulSoup
 except ModuleNotFoundError as e:
     print(e)
-    print('Install dependencies for this script by running "python3 -m pip install requirements.txt".')
+    print('Install dependencies for this script by running')
+    print('"python3 -m pip install requirements.txt".')
     exit(1)
 
 
 LINUX_MAN_PAGES = 'https://www.man7.org/linux/man-pages/man1/{}.1.html'
-FREEBSD_MAN_PAGES = 'https://bsd-unix.com/man.cgi?query={}&sektion=1&manpath=FreeBSD+9.3-stable&format=html'
+FREEBSD_MAN_PAGES = ('https://bsd-unix.com/man.cgi?query={}&sektion=1'
+                     '&manpath=FreeBSD+9.3-stable&format=html')
 # Man pages for Solaris user commands
 SOLARIS_USER_MAN_PAGES = 'https://docs.oracle.com/cd/E23824_01/html/821-1461/{}-1.html'
 # Man pages for Solaris admin commands
@@ -111,7 +113,9 @@ def get_soup(pages_string, command_name):
     # to be visited by a browser, so emulate Google Chrome on
     # Windows
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.106 Safari/537.36',
+        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                       'AppleWebKit/537.36 (KHTML, like Gecko) '
+                       'Chrome/91.0.4472.106 Safari/537.36'),
     }
 
     res = requests.get(pages_string.format(command_name), headers=headers)
