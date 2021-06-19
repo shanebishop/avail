@@ -32,12 +32,12 @@ def main():
 
 def input_loop():
     while True:
-        user_input = input('Command: ')
+        user_input = input('Command or ^C: ')
 
         command = shlex.split(user_input)
         command_name = command[0]
 
-        user_opts = {x for x in command if x[0] == '-' and line != '-'}
+        user_opts = {x for x in command if x[0] == '-' and x != '-'}
 
         linux_opts, description = get_linux_opts(command_name)
 
@@ -47,6 +47,7 @@ def input_loop():
 
         freebsd_opts = get_freebsd_opts(command_name)
         plan_9_opts = get_plan_9_opts(command_name)
+        posix_7_opts = get_posix_7_opts(command_name)
 
         print()
         print(description)
@@ -56,6 +57,8 @@ def input_loop():
             print(f'{command_name} is not available on FreeBSD.')
         if plan_9_opts is None:
             print(f'{command_name} does not have a Plan 9 implementation.')
+        if posix_7_opts is None:
+            print(f'{command_name} is not a POSIX 7 utility.')
 
         for opt in user_opts:
             not_present_list = []
@@ -76,6 +79,8 @@ def input_loop():
             print('FreeBSD man page:', FREEBSD_MAN_PAGES.format(command_name))
         if plan_9_opts is not None:
             print('Plan 9 man page:', PLAN_9_MAN_PAGES.format(command_name))
+        if posix_7_opts is not None:
+            print('POSIX 7 reference page:', POSIX7_PAGES.format(command_name))
         print()
 
 
@@ -217,6 +222,33 @@ def find_opts_plan_9(soup, header):
     lines = soup.text.split('\n')
     opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in lines if line.strip()]
     opts = [line for line in opts_lines if line[0] == '-' and line != '-']
+
+    # Remove false positives
+    opts = {o for o in opts if not o[-1] in '.,;)]}!'}
+
+    return opts
+
+
+def get_posix_7_opts(command_name):
+    soup, page_found = get_soup(POSIX7_PAGES, command_name)
+
+    if not page_found:
+        return None
+
+    search_sections = [
+        'OPTIONS',
+    ]
+
+    opts = set()
+    for section in search_sections:
+        opts.update(find_opts_posix_7(soup, section))
+
+    return opts
+
+
+def find_opts_posix_7(soup, header):
+    opts_candidates = soup.find_all('dt')
+    opts = [o.text for o in soup.find_all('dt') if o.text[0] == '-' and o.text != '-']
 
     # Remove false positives
     opts = {o for o in opts if not o[-1] in '.,;)]}!'}
