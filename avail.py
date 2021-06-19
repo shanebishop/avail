@@ -4,8 +4,13 @@
 import shlex
 from sys import exit
 
-import requests
-from bs4 import BeautifulSoup
+try:
+    import requests
+    from bs4 import BeautifulSoup
+except ModuleNotFoundError as e:
+    print(e)
+    print('Install dependencies for this script by running "python3 -m pip install requirements.txt".')
+    exit(1)
 
 
 LINUX_MAN_PAGES = 'https://www.man7.org/linux/man-pages/man1/{}.1.html'
