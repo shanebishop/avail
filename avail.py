@@ -144,40 +144,6 @@ def get_freebsd_opts(command_name):
 
 
 def find_opts_freebsd(soup, header):
-    # """Returns options in a section of a FreeBSD man page.
-    # The section searched is identified by the header."""
-    #
-    # # Get the source line of the header
-    # header_el = soup.find(id=header)
-    # if header_el is None:
-    #     return set()
-    # header_source_line = soup.find(id=header).sourceline
-    #
-    # # Get sourceline of all headers
-    # header_source_lines = [h.sourceline for h in soup.find_all('a', href='#end')]
-    #
-    # # Find source line of next header
-    # for line in sorted(header_source_lines):
-    #     if line > header_source_line:
-    #         next_header_source_line = line
-    #         break
-    #
-    # # Get the element where the options are described
-    # print(header_source_line)
-    # print(next_header_source_line)
-    # print([pre.sourceline for pre in soup.find_all('pre')])
-    # print([pre for pre in soup.find_all('pre') if pre.sourceline > header_source_line and pre.sourceline < next_header_source_line])
-    # opts_el = [pre for pre in soup.find_all('pre') if pre.sourceline > header_source_line and pre.sourceline < next_header_source_line][0]
-    #
-    # opts_lines = opts_el.text.split('\n')
-    # opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in opts_lines if line]
-    # opts = [line for line in opts_lines if line[0] == '-']
-    #
-    # # Remove false positives
-    # opts = {o for o in opts if not o[-1] in '.,;)]}!'}
-    #
-    # return opts
-
     lines = soup.text.split('\n')
     opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in lines if line]
     opts = [line for line in opts_lines if line[0] == '-']
