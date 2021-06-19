@@ -18,6 +18,8 @@ PLAN_9_MAN_PAGES = 'http://man.cat-v.org/plan_9/1/{}'
 POSIX7_PAGES = 'https://pubs.opengroup.org/onlinepubs/9699919799/utilities/{}.html'
 GNU_HTML_MANUALS = 'https://www.gnu.org/software/{}/manual/html_chapter/index.html'
 
+NON_OPTS_CHARS = '.,;)]}!'
+
 
 def main():
     print('Disclaimer: Even if an option is available on another OS, there')
@@ -32,25 +34,29 @@ def main():
 
 def input_loop():
     while True:
-        user_input = input('Command or ^C: ')
+        user_input = input('Enter command or ^C: ')
 
         command = shlex.split(user_input)
+        if command == []:
+            continue
         command_name = command[0]
 
-        user_opts = {x for x in command if x[0] == '-' and x != '-'}
+        user_opts = {x for x in command if x and x[0] == '-' and x != '-'}
 
         linux_opts, description = get_linux_opts(command_name)
+        freebsd_opts = get_freebsd_opts(command_name)
+        solaris_opts = get_solaris_opts(command_name)
 
-        if linux_opts is None:
+        if linux_opts is None and freebsd_opts is None and solaris_opts is None:
             print(f'Failed to find result for "{command_name}".')
             continue
 
-        freebsd_opts = get_freebsd_opts(command_name)
         plan_9_opts = get_plan_9_opts(command_name)
         posix_7_opts = get_posix_7_opts(command_name)
 
-        print()
-        print(description)
+        if description:
+            print()
+            print(description)
         print()
 
         if freebsd_opts is None:
@@ -59,6 +65,8 @@ def input_loop():
             print(f'{command_name} does not have a Plan 9 implementation.')
         if posix_7_opts is None:
             print(f'{command_name} is not a POSIX 7 utility.')
+        if solaris_opts is None:
+            print(f'{command_name} is not available on Solaris.')
 
         for opt in user_opts:
             not_present_list = []
@@ -69,6 +77,8 @@ def input_loop():
                 not_present_list.append('FreeBSD')
             if plan_9_opts and opt not in plan_9_opts:
                 not_present_list.append('Plan 9')
+            if solaris_opts and opt not in solaris_opts:
+                not_present_list.append('Solaris')
 
             print(f'{opt} not available on the following: {not_present_list}')
 
@@ -158,7 +168,7 @@ def find_opts_linux(soup, header):
     opts = [line for line in opts_lines if line[0] == '-' and line != '-']
 
     # Remove false positives
-    opts = {o for o in opts if not o[-1] in '.,;)]}!'}
+    opts = {o for o in opts if not o[-1] in NON_OPTS_CHARS}
 
     return opts
 
@@ -169,25 +179,17 @@ def get_freebsd_opts(command_name):
     if not page_found:
         return None
 
-    search_sections = [
-        'DESCRIPTION',
-        'PRIMARIES',  # The FreeBSD find man page has more options under thiis heading
-    ]
-
-    opts = set()
-    for section in search_sections:
-        opts.update(find_opts_freebsd(soup, section))
-
+    opts = find_opts_freebsd(soup)
     return opts
 
 
-def find_opts_freebsd(soup, header):
+def find_opts_freebsd(soup):
     lines = soup.text.split('\n')
     opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in lines if line.strip()]
     opts = [line for line in opts_lines if line[0] == '-' and line != '-']
 
     # Remove false positives
-    opts = {o for o in opts if not o[-1] in '.,;)]}!'}
+    opts = {o for o in opts if not o[-1] in NON_OPTS_CHARS}
 
     return opts
 
@@ -207,24 +209,17 @@ def get_plan_9_opts(command_name):
     if not page_found:
         return None
 
-    search_sections = [
-        'DESCRIPTION',
-    ]
-
-    opts = set()
-    for section in search_sections:
-        opts.update(find_opts_plan_9(soup, section))
-
+    opts = find_opts_plan_9(soup)
     return opts
 
 
-def find_opts_plan_9(soup, header):
+def find_opts_plan_9(soup):
     lines = soup.text.split('\n')
     opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in lines if line.strip()]
     opts = [line for line in opts_lines if line[0] == '-' and line != '-']
 
     # Remove false positives
-    opts = {o for o in opts if not o[-1] in '.,;)]}!'}
+    opts = {o for o in opts if not o[-1] in NON_OPTS_CHARS}
 
     return opts
 
@@ -235,23 +230,39 @@ def get_posix_7_opts(command_name):
     if not page_found:
         return None
 
-    search_sections = [
-        'OPTIONS',
-    ]
+    opts = find_opts_posix_7(soup)
+    return opts
 
-    opts = set()
-    for section in search_sections:
-        opts.update(find_opts_posix_7(soup, section))
+
+def find_opts_posix_7(soup):
+    opts_candidates = soup.find_all('dt')
+    opts = [o.text for o in opts_candidates if o.text and o.text[0] == '-' and o.text != '-']
+
+    # Remove false positives
+    opts = {o for o in opts if not o[-1] in NON_OPTS_CHARS}
 
     return opts
 
 
-def find_opts_posix_7(soup, header):
-    opts_candidates = soup.find_all('dt')
-    opts = [o.text for o in soup.find_all('dt') if o.text[0] == '-' and o.text != '-']
+def get_solaris_opts(command_name):
+    soup, page_found = get_soup(SOLARIS_USER_MAN_PAGES, command_name)
+
+    if not page_found:
+        soup, page_found = get_soup(SOLARIS_ADMIN_MAN_PAGES, command_name)
+        if not page_found:
+            return None
+
+    opts = find_opts_solaris(soup)
+
+    return opts
+
+
+def find_opts_solaris(soup):
+    opts_candidates = soup.find_all('tt')
+    opts = [o.text for o in opts_candidates if o.text and o.text[0] == '-' and o.text != '-']
 
     # Remove false positives
-    opts = {o for o in opts if not o[-1] in '.,;)]}!'}
+    opts = {o for o in opts if not o[-1] in NON_OPTS_CHARS}
 
     return opts
 
