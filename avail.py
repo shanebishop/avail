@@ -23,6 +23,8 @@ SOLARIS_USER_MAN_PAGES = 'https://docs.oracle.com/cd/E23824_01/html/821-1461/{}-
 SOLARIS_ADMIN_MAN_PAGES = 'https://docs.oracle.com/cd/E23824_01/html/821-1462/{}-1m.html'
 PLAN_9_MAN_PAGES = 'http://man.cat-v.org/plan_9/1/{}'
 POSIX7_PAGES = 'https://pubs.opengroup.org/onlinepubs/9699919799/utilities/{}.html'
+AIX_MAN_PAGES = ('http://ps-2.kev009.com/wisclibrary/aix52/usr/share/man/info/'
+                 'en_US/a_doc_lib/cmds/aixcmds{}/{}.htm')
 GNU_HTML_MANUALS = 'https://www.gnu.org/software/{}/manual/html_chapter/index.html'
 
 NON_OPTS_CHARS = '.,;)]}!'
@@ -53,8 +55,10 @@ def input_loop():
         linux_opts, description = get_linux_opts(command_name)
         freebsd_opts = get_freebsd_opts(command_name)
         solaris_opts = get_solaris_opts(command_name)
+        aix_opts = get_aix_opts(command_name)
 
-        if linux_opts is None and freebsd_opts is None and solaris_opts is None:
+        if (linux_opts is None and freebsd_opts is None and
+                solaris_opts is None and aix_opts is None):
             print(f'Failed to find result for "{command_name}".')
             continue
 
@@ -93,8 +97,11 @@ def input_loop():
             print(f'{opt} not available on the following: {not_present_list}')
 
         print()
-        print('Linux man page:', LINUX_MAN_PAGES.format(command_name))
-        print('GNU HTML manual:', GNU_HTML_MANUALS.format(command_name))
+        if linux_opts is not None:
+            print('Linux man page:', LINUX_MAN_PAGES.format(command_name))
+            # TODO It may not be the case that all Linux man page entries
+            # have a corresponding GNU HTML manual
+            print('GNU HTML manual:', GNU_HTML_MANUALS.format(command_name))
         if freebsd_opts is not None:
             print('FreeBSD man page:', FREEBSD_MAN_PAGES.format(command_name))
         if plan_9_opts is not None:
@@ -219,6 +226,11 @@ def find_opts_freebsd(soup):
 
 
 def get_plan_9_opts(command_name):
+    # TODO Lots of Plan 9 man pages do not permit my style of
+    # searching, so the short options line at the top also needs
+    # to be parsed for options, and then the hard coded bits below
+    # should be removed
+
     # Some of the plan 9 man pages don't contain the options
     # on lines by themselves, so we hardcode the options instead
     if command_name == 'cp':
@@ -284,6 +296,65 @@ def get_solaris_opts(command_name):
 def find_opts_solaris(soup):
     opts_candidates = soup.find_all('tt')
     opts = [o.text for o in opts_candidates if o.text and o.text[0] == '-' and o.text != '-']
+
+    # Remove false positives
+    opts = {o for o in opts if not o[-1] in NON_OPTS_CHARS}
+
+    return opts
+
+
+def get_aix_opts(command_name):
+    page_found = False
+
+    # Check each "volume" in AIX command documentation volumes until a match
+    # is found
+    NUM_AIX_CMD_VOLUMES = 6
+    for volume in range(1, NUM_AIX_CMD_VOLUMES+1):
+        soup, page_found = get_soup(AIX_MAN_PAGES.replace('{}', str(volume), 1), command_name)
+        if page_found:
+            break
+
+    # If no match for any volume, return None
+    if not page_found:
+        return None
+
+    search_sections = [
+        'Flags',
+        'Expression Terms',
+        'Does Not Exist', # TODO
+    ]
+
+    opts = set()
+    for section in search_sections:
+        opts.update(find_opts_aix(soup, section))
+
+    return opts
+
+
+def find_opts_aix(soup, section):
+    h3s = soup.find_all('h3')
+
+    # Get sourceline of the section with flags
+    search = [h.sourceline for h in h3s if h.text == section]
+    if not search:
+        return set()
+    flags_sourceline = search[0]
+
+    header_sourcelines = sorted([h.sourceline for h in h3s])
+
+    # Find sourceline of next header after flags section
+    for sourceline in header_sourcelines:
+        if sourceline > flags_sourceline:
+            next_header_sourceline = sourceline
+            break
+
+    opts_candidates = soup.find_all('span', class_='bold')
+    opts = [
+        c.text for c in opts_candidates if
+        c.sourceline > flags_sourceline and
+        c.sourceline < next_header_sourceline and
+        c.text[0] == '-' and c.text != '-'
+    ]
 
     # Remove false positives
     opts = {o for o in opts if not o[-1] in NON_OPTS_CHARS}
