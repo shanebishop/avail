@@ -226,13 +226,9 @@ def find_opts_freebsd(soup):
 
 
 def get_plan_9_opts(command_name):
-    # TODO Lots of Plan 9 man pages do not permit my style of
-    # searching, so the short options line at the top also needs
-    # to be parsed for options, and then the hard coded bits below
-    # should be removed
-
-    # Some of the plan 9 man pages don't contain the options
-    # on lines by themselves, so we hardcode the options instead
+    # Some of the plan 9 man pages document multiple commands on
+    # in the same man page, which makes parsing difficult. To
+    # simplify parsing, these options are hardcoded.
     if command_name == 'cp':
         return {'-g', '-u', '-x'}
     elif command_name == 'fcp':
@@ -252,7 +248,22 @@ def get_plan_9_opts(command_name):
 def find_opts_plan_9(soup):
     lines = soup.text.split('\n')
     opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in lines if line.strip()]
-    opts = [line for line in opts_lines if line[0] == '-' and line != '-']
+    opts = {line for line in opts_lines if line[0] == '-' and line != '-'}
+
+    # Plan 9 man pages often do not have a section dedicated to options, and
+    # instead provide all the options in teh SYNOPSIS, so we must parse that
+    # as well
+    # TODO This approach will miss options that take arguments
+    synopsis = lines[lines.index('     SYNOPSIS')+1]
+    if '[' in synopsis:
+        # Example: for ls, synopsis is
+        # 'ls [ -dlmnpqrstuFQT ] name ...'
+        short_opts = synopsis[synopsis.index('[')+2 : synopsis.index(']')-1]
+        if short_opts[0] == '-':  # Check that there are short opts
+            # Skipping initial '-' character, split the list of short options
+            # to get each short option
+            short_opts = [f'-{o}' for o in short_opts[1:]]
+            opts.update(short_opts)
 
     # Remove false positives
     opts = {o for o in opts if not o[-1] in NON_OPTS_CHARS}
@@ -321,7 +332,6 @@ def get_aix_opts(command_name):
     search_sections = [
         'Flags',
         'Expression Terms',
-        'Does Not Exist', # TODO
     ]
 
     opts = set()
