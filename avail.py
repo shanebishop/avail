@@ -226,47 +226,84 @@ def find_opts_freebsd(soup):
 
 
 def get_plan_9_opts(command_name):
-    # Some of the plan 9 man pages document multiple commands on
-    # in the same man page, which makes parsing difficult. To
-    # simplify parsing, these options are hardcoded.
-    if command_name == 'cp':
-        return {'-g', '-u', '-x'}
-    elif command_name == 'fcp':
-        return {'-g', '-u', '-x'}
-    elif command_name == 'mv':
-        return set()
+    # There is no web address for fcp or mv commands, as they are
+    # shared under the cp page. Therefore, we use an effective command name
+    # for lookup purposes.
+    effective_command_name = command_name
+    if command_name in ['fcp', 'mv']:
+        effective_command_name = 'cp'
 
-    soup, page_found = get_soup(PLAN_9_MAN_PAGES, command_name)
+    soup, page_found = get_soup(PLAN_9_MAN_PAGES, effective_command_name)
 
     if not page_found:
         return None
 
-    opts = find_opts_plan_9(soup)
+    # We must use the regular command_name (not the effective command name)
+    # to parse options out from the page
+    opts = find_opts_plan_9(soup, command_name)
     return opts
 
 
-def find_opts_plan_9(soup):
+def find_opts_plan_9(soup, command_name):
     lines = soup.text.split('\n')
     opts_lines = [line.lstrip().split(maxsplit=1)[0] for line in lines if line.strip()]
     opts = {line for line in opts_lines if line[0] == '-' and line != '-'}
 
     # Plan 9 man pages often do not have a section dedicated to options, and
-    # instead provide all the options in teh SYNOPSIS, so we must parse that
-    # as well
-    # TODO This approach will miss options that take arguments
-    synopsis = lines[lines.index('     SYNOPSIS')+1]
-    if '[' in synopsis:
-        # Example: for ls, synopsis is
-        # 'ls [ -dlmnpqrstuFQT ] name ...'
-        short_opts = synopsis[synopsis.index('[')+2 : synopsis.index(']')-1]
-        if short_opts[0] == '-':  # Check that there are short opts
-            # Skipping initial '-' character, split the list of short options
-            # to get each short option
-            short_opts = [f'-{o}' for o in short_opts[1:]]
-            opts.update(short_opts)
+    # instead provide all the options in the SYNOPSIS, so we must parse that
+    # as well.
+    # Some Plan 9 man pages document multiple commands, so we must only
+    # consider the lines that start with the command_name.
+
+    # Get first line of synopsis
+    line_num = lines.index('     SYNOPSIS')+1
+    line = lines[line_num].strip()
+
+    # Loop through each line of synopsis until first word matches command_name
+    while not line.startswith(command_name):
+        line_num += 1
+        line = lines[line_num].strip()
+
+    # Parse out options from each line where first word matches command_name
+    while line.startswith(command_name):
+        opts.update(get_plan_9_opts_from_line(line))
+
+        # Move to next line
+        line_num += 1
+        line = lines[line_num].strip()
 
     # Remove false positives
     opts = {o for o in opts if not o[-1] in NON_OPTS_CHARS}
+
+    return opts
+
+
+def get_plan_9_opts_from_line(line):
+    opts = set()
+
+    # Split line into [ ] groups, and discard the first portion
+    # since it is the command name
+    portions = line.split('[')[1:]
+
+    for portion in portions:
+        # Split each [ ] on whitespace
+        words = portion.strip().split()
+
+        # Throw away the ] and everything after it
+        closing_index = words.index(']')
+        if closing_index != -1:
+            words = words[:closing_index]
+
+        if len(words) == 1:
+            # This [ ] portion has no arguments, and is just a long list of
+            # options. words[0] is the options as -abcd, so words[0][1:]
+            # extracts the abcd part. Then the abcd is turned into
+            # {'-a', '-b', '-c', '-d'}
+            opts.update({f'-{o}' for o in list(words[0][1:])})
+        else:
+            # This [ ] consists of an option and its argument. The option is
+            # the first word.
+            opts.update(words[0])
 
     return opts
 
