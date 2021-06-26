@@ -331,6 +331,7 @@ def get_aix_opts(command_name):
 
     search_sections = [
         'Flags',
+        'Description',
         'Expression Terms',
     ]
 
