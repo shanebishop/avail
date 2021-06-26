@@ -121,7 +121,7 @@ def get_soup(pages_string, command_name):
     # Right now get_cached() is just a placeholder function
     soup, cache_hit = get_cached(command_name)
     if cache_hit:
-        return soup
+        return soup, True
 
     # Some of the pages will be unhappy if they do not appear
     # to be visited by a browser, so emulate Google Chrome on
